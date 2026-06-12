@@ -10,13 +10,6 @@ import os
 import io
 import subprocess, sys
 
-# PDF 라이브러리 자동 설치
-try:
-    import pypdf
-except ImportError:
-    subprocess.run([sys.executable,"-m","pip","install","pypdf","--quiet"], check=False)
-    import pypdf
-
 st.set_page_config(
     page_title="도메인 특화 AI",
     page_icon="🧠",
@@ -116,7 +109,14 @@ with st.sidebar:
                 # 파일 읽기
                 name = corpus_file.name.lower()
                 if name.endswith(".pdf"):
-                    reader = pypdf.PdfReader(io.BytesIO(corpus_file.read()))
+                    try:
+                        import pypdf as _pdf
+                    except ImportError:
+                        subprocess.run([sys.executable,"-m","pip","install","pypdf","--quiet"], check=False)
+                        import importlib, importlib.util
+                        import site; importlib.reload(site)
+                        import pypdf as _pdf
+                    reader = _pdf.PdfReader(io.BytesIO(corpus_file.read()))
                     text = "\n".join(p.extract_text() or "" for p in reader.pages)
                 elif name.endswith(".docx"):
                     import docx
