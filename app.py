@@ -108,13 +108,9 @@ with st.sidebar:
                 # 파일 읽기
                 name = corpus_file.name.lower()
                 if name.endswith(".pdf"):
-                    try:
-                        import pypdf
-                        reader = pypdf.PdfReader(io.BytesIO(corpus_file.read()))
-                    except ImportError:
-                        import PyPDF2 as pypdf
-                        reader = pypdf.PdfReader(io.BytesIO(corpus_file.read()))
-                    text = "\n".join(p.extract_text() or "" for p in reader.pages)
+                    import pdfplumber
+                    with pdfplumber.open(io.BytesIO(corpus_file.read())) as pdf:
+                        text = "\n".join(p.extract_text() or "" for p in pdf.pages)
                 elif name.endswith(".docx"):
                     import docx
                     doc = docx.Document(io.BytesIO(corpus_file.read()))
