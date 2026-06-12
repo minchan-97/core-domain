@@ -8,9 +8,6 @@ import streamlit as st
 import time
 import os
 import io
-from dotenv import load_dotenv
-
-load_dotenv()
 
 st.set_page_config(
     page_title="도메인 특화 AI",
@@ -81,7 +78,7 @@ with st.sidebar:
 
     api_key = st.text_input(
         "OpenAI API Key",
-        value=os.getenv("OPENAI_API_KEY",""),
+        value=st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY", "")),
         type="password",
         placeholder="sk-...",
     )
