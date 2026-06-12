@@ -8,6 +8,14 @@ import streamlit as st
 import time
 import os
 import io
+import subprocess, sys
+
+# PDF 라이브러리 자동 설치
+try:
+    import pypdf
+except ImportError:
+    subprocess.run([sys.executable,"-m","pip","install","pypdf","--quiet"], check=False)
+    import pypdf
 
 st.set_page_config(
     page_title="도메인 특화 AI",
@@ -108,22 +116,8 @@ with st.sidebar:
                 # 파일 읽기
                 name = corpus_file.name.lower()
                 if name.endswith(".pdf"):
-                    text = ""
-                    try:
-                        import pdfplumber
-                        with pdfplumber.open(io.BytesIO(corpus_file.read())) as pdf:
-                            text = "\n".join(p.extract_text() or "" for p in pdf.pages)
-                    except ImportError:
-                        try:
-                            from pypdf import PdfReader
-                            reader = PdfReader(io.BytesIO(corpus_file.read()))
-                            text = "\n".join(p.extract_text() or "" for p in reader.pages)
-                        except ImportError:
-                            import subprocess, sys
-                            subprocess.run([sys.executable,"-m","pip","install","pypdf","-q"])
-                            from pypdf import PdfReader
-                            reader = PdfReader(io.BytesIO(corpus_file.read()))
-                            text = "\n".join(p.extract_text() or "" for p in reader.pages)
+                    reader = pypdf.PdfReader(io.BytesIO(corpus_file.read()))
+                    text = "\n".join(p.extract_text() or "" for p in reader.pages)
                 elif name.endswith(".docx"):
                     import docx
                     doc = docx.Document(io.BytesIO(corpus_file.read()))
