@@ -441,12 +441,15 @@ class CoreAIv2Engine:
 
         # 가드레일 판정
         if self.nm_engine.is_trained:
-            # nm_engine 있으면 전체 NM으로 판정
             nm_result = self.nm_engine.evaluate(text, logp_thr=logp_thr)
             verdict   = nm_result.get("status", "SKIP")
             best_logp = nm_result.get("avg_logp", 0.0)
-        elif self.markovs:
-            # nm_engine 없으면 최적 클러스터 마르코프로 판정
+        else:
+            verdict   = "SKIP"
+            best_logp = 0.0
+
+        # SKIP이면 최적 클러스터 마르코프로 fallback
+        if verdict == "SKIP" and self.markovs:
             best_logp = top_score
             if best_logp >= logp_thr:
                 verdict = "PASS"
@@ -454,9 +457,6 @@ class CoreAIv2Engine:
                 verdict = "WARNING"
             else:
                 verdict = "FATAL"
-        else:
-            verdict = "SKIP"
-            best_logp = 0.0
 
         ms = (time.perf_counter() - t0) * 1000
 
