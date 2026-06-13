@@ -224,7 +224,7 @@ with st.sidebar:
         key="engine_pkl",
         help="이전에 저장한 엔진을 업로드하면 재학습 없이 즉시 사용",
     )
-    if pkl_file and not st.session_state.trained:
+    if pkl_file:
         if not pkl_file.name.endswith('.pkl'):
             st.warning("⚠️ .pkl 파일만 지원해요.")
         else:
@@ -237,10 +237,20 @@ with st.sidebar:
                 st.session_state.engine = engine
                 st.session_state.trained = True
                 st.session_state.train_stats = data.get("train_stats", {})
+                st.session_state.guideline_hint = data.get("guideline_hint","")
                 st.success(f"✓ 엔진 로드 완료 ({elapsed:.0f}ms)")
                 st.rerun()
             except Exception as e:
                 st.error(f"로드 실패: {e}")
+
+    # 재학습 버튼
+    if st.session_state.trained:
+        if st.button("🔄 초기화 (재학습)", use_container_width=True):
+            for key in ["trained","engine","engine_bytes","engine_filename",
+                        "train_stats","guideline_hint","history"]:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.rerun()
 
     st.markdown("---")
     st.caption("도메인 특화 AI — GPU 0 | 오프라인")
@@ -327,6 +337,11 @@ padding:1.5rem;margin:1rem 0;">
 
         st.markdown("**최종 답변**")
         st.info(response.answer)
+
+        # 원문 출처
+        if st.session_state.guideline_hint:
+            with st.expander("📄 참고 원문 (가이드라인 앞부분)", expanded=False):
+                st.text(st.session_state.guideline_hint[:800])
 
         if len(response.history) > 1:
             st.markdown("**시도별 가드레일 결과**")
