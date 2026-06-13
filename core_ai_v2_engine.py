@@ -424,16 +424,7 @@ class CoreAIv2Engine:
                  expand: bool = False) -> dict:
         t0 = time.perf_counter()
 
-        # 가드레일 판정 — NeuralMarkov 전체 코퍼스 기준
-        if not self.nm_engine.is_trained:
-            verdict = "SKIP"
-            best_logp = 0.0
-        else:
-            nm_result = self.nm_engine.evaluate(text, logp_thr=logp_thr)
-            verdict   = nm_result.get("status", "SKIP")
-            best_logp = nm_result.get("avg_logp", 0.0)
-
-        # 클러스터별 참고 점수 (표시용)
+        # 클러스터별 점수 (항상 계산)
         tokens = tokenize(text)
         per_cluster = {}
         best_cluster = -1
@@ -447,6 +438,25 @@ class CoreAIv2Engine:
             if s > top_score:
                 top_score = s
                 best_cluster = k
+
+        # 가드레일 판정
+        if self.nm_engine.is_trained:
+            # nm_engine 있으면 전체 NM으로 판정
+            nm_result = self.nm_engine.evaluate(text, logp_thr=logp_thr)
+            verdict   = nm_result.get("status", "SKIP")
+            best_logp = nm_result.get("avg_logp", 0.0)
+        elif self.markovs:
+            # nm_engine 없으면 최적 클러스터 마르코프로 판정
+            best_logp = top_score
+            if best_logp >= logp_thr:
+                verdict = "PASS"
+            elif best_logp >= -14.0:
+                verdict = "WARNING"
+            else:
+                verdict = "FATAL"
+        else:
+            verdict = "SKIP"
+            best_logp = 0.0
 
         ms = (time.perf_counter() - t0) * 1000
 
