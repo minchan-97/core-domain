@@ -368,6 +368,17 @@ class CoreAIv2Engine:
             m.total = md["total"]
             engine.markovs[k] = m
 
+        # nm_engine 복원
+        nm = data.get("nm_engine")
+        if nm:
+            from collections import Counter as _C, defaultdict as _dd
+            engine.nm_engine.uni   = _C(nm["uni"])
+            engine.nm_engine.bi    = _dd(_C, {k:_C(v) for k,v in nm["bi"].items()})
+            engine.nm_engine.tri   = _dd(_C, {k:_C(v) for k,v in nm["tri"].items()})
+            engine.nm_engine.total = nm["total"]
+            engine.nm_engine.alpha = nm.get("alpha", 0.001)
+            engine.nm_engine.is_trained = True
+
         engine.is_trained = True
         return engine
 
