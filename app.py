@@ -1,13 +1,21 @@
 """
-도메인 특화 AI
+CoreAI v2 — Hopfield 분해 + 마르코프 + TinyTransformer
 =======================================================
-문서 기반 도메인 특화 AI 가드레일
-
+가이드라인만 넣으면 도메인 특화 AI로 자동 특화
+v2: Hopfield 코퍼스 분해기 탑재 → 정확도 향상
 """
 import streamlit as st
 import time
 import os
 import io
+from dotenv import load_dotenv
+
+load_dotenv()
+
+try:
+    _secrets = st.secrets
+except Exception:
+    _secrets = {}
 
 st.set_page_config(
     page_title="도메인 특화 AI",
@@ -73,12 +81,12 @@ if "guideline_hint" not in st.session_state:
 
 # ── 사이드바 ──────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### 🧠 도메인 특화 AI")
+    st.markdown("### 🎯 CoreAI v2")
     st.markdown("---")
 
     api_key = st.text_input(
         "OpenAI API Key",
-        value=st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY", "")),
+        value=_secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY","")),
         type="password",
         placeholder="sk-...",
     )
@@ -88,12 +96,10 @@ with st.sidebar:
     st.markdown("### 📚 가이드라인 코퍼스")
 
     corpus_file = st.file_uploader(
-        "코퍼스 업로드 (.txt / .docx)",
-        type=["txt","docx"],
-        help="PDF는 텍스트로 변환 후 .txt로 업로드",
+        "코퍼스 업로드",
+        type=["txt","pdf","docx","xlsx"],
+        help="이 문서가 도메인 기준",
     )
-
-    st.caption("💡 PDF → txt 변환: Adobe, Word, 브라우저 인쇄→PDF저장 등 활용")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -105,14 +111,29 @@ with st.sidebar:
     max_retry = st.slider("최대 재생성 횟수", 1, 5, 3)
 
     if corpus_file and st.button("🚀 v2 학습", use_container_width=True):
-        with st.spinner("AI 학습 중..."):
+        with st.spinner("CoreAI v2 학습 중..."):
             try:
                 # 파일 읽기
                 name = corpus_file.name.lower()
-                if name.endswith(".docx"):
+                if name.endswith(".pdf"):
+                    try:
+                        import pypdf
+                        reader = pypdf.PdfReader(io.BytesIO(corpus_file.read()))
+                        text = "\n".join(p.extract_text() or "" for p in reader.pages)
+                    except ImportError:
+                        st.error("PDF 라이브러리 없음. txt로 변환 후 업로드해주세요.")
+                        st.stop()
+                elif name.endswith(".docx"):
                     import docx
                     doc = docx.Document(io.BytesIO(corpus_file.read()))
                     text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+                elif name.endswith(".xlsx"):
+                    import pandas as pd
+                    df = pd.read_excel(io.BytesIO(corpus_file.read()))
+                    text = "\n".join(
+                        " ".join(str(v) for v in row if str(v)!="nan")
+                        for _,row in df.iterrows()
+                    )
                 else:
                     text = corpus_file.read().decode("utf-8", errors="ignore")
 
@@ -124,7 +145,7 @@ with st.sidebar:
                 n_before = len([l for l in text.split('\n') if l.strip()])
                 n_after  = len([l for l in text_clean.split('\n') if l.strip()])
                 if n_after < n_before:
-                    st.caption(f"코퍼스 정제: {n_before}줄 → {n_after}줄 ({n_before-n_after}줄 제거)")
+                    st.caption(f"코퍼스 정제: {n_before}줄 → {n_after}줄")
                 text = text_clean if text_clean.strip() else text
 
                 prog = st.progress(0)
@@ -149,7 +170,6 @@ with st.sidebar:
                 # 자동 저장
                 try:
                     import pickle
-                    nm = st.session_state.engine.nm_engine
                     engine_bytes = pickle.dumps({
                         "n_clusters":      st.session_state.engine.n_clusters,
                         "global_vocab":    st.session_state.engine.global_vocab,
@@ -172,13 +192,14 @@ with st.sidebar:
                             }
                             for k, m in st.session_state.engine.markovs.items()
                         },
+                        "guideline_hint": st.session_state.guideline_hint,
                         "nm_engine": {
-                            "uni":   dict(nm.uni),
-                            "bi":    {k2: dict(v) for k2,v in nm.bi.items()},
-                            "tri":   {k2: dict(v) for k2,v in nm.tri.items()},
-                            "total": nm.total,
-                            "alpha": getattr(nm,"alpha",0.001),
-                        } if nm.is_trained else None,
+                            "uni":   dict(st.session_state.engine.nm_engine.uni),
+                            "bi":    {k2:dict(v) for k2,v in st.session_state.engine.nm_engine.bi.items()},
+                            "tri":   {k2:dict(v) for k2,v in st.session_state.engine.nm_engine.tri.items()},
+                            "total": st.session_state.engine.nm_engine.total,
+                            "alpha": getattr(st.session_state.engine.nm_engine,"alpha",0.001),
+                        } if st.session_state.engine.nm_engine.is_trained else None,
                     })
                     st.session_state.engine_bytes = engine_bytes
                     st.session_state.engine_filename = f"coreai_v2_{corpus_file.name.split('.')[0]}.pkl"
@@ -190,7 +211,7 @@ with st.sidebar:
     # 학습 완료 상태
     if st.session_state.trained:
         stats = st.session_state.train_stats
-        st.success(f"✓ AI 학습됨")
+        st.success(f"✓ CoreAI v2 학습됨")
         st.caption(f"{stats.get('n_sentences',0)}문장 | {stats.get('vocab_size',0)}어휘")
 
         # 다운로드 버튼
@@ -219,8 +240,8 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 💾 저장된 엔진 불러오기")
     pkl_file = st.file_uploader(
-        "엔진 파일 (.pkl) — 모바일: 파일앱에서 선택",
-        type=None,
+        "엔진 파일 (.pkl)",
+        type=["pkl"],
         key="engine_pkl",
         help="이전에 저장한 엔진을 업로드하면 재학습 없이 즉시 사용",
     )
@@ -253,14 +274,14 @@ with st.sidebar:
             st.rerun()
 
     st.markdown("---")
-    st.caption("도메인 특화 AI — GPU 0 | 오프라인")
+    st.caption("CoreAI v2 — Hopfield+Markov+TinyTransformer")
     st.caption("GPU 0 | CPU only | numpy only")
 
 
 # ── 메인 ─────────────────────────────────────────────────────
-st.markdown('<div class="title">🧠 도메인 특화 AI</div>', unsafe_allow_html=True)
+st.markdown('<div class="title">🎯 CoreAI v2</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="sub">문서를 넣으면 그 도메인 전문가가 됩니다 | GPU 0 | 오프라인</div>',
+    '<div class="sub">Hopfield 분해기 → 클러스터 마르코프 → TinyTransformer 의미 보정 | GPU 0</div>',
     unsafe_allow_html=True
 )
 
@@ -303,7 +324,7 @@ with tab1:
             )
             return resp.choices[0].message.content.strip()
 
-        with st.spinner("AI 실행 중..."):
+        with st.spinner("CoreAI v2 실행 중..."):
             response = run_guardrail_loop(
                 question=question,
                 llm_fn=llm_fn,
@@ -340,7 +361,7 @@ padding:1.5rem;margin:1rem 0;">
 
         # 원문 출처
         if st.session_state.guideline_hint:
-            with st.expander("📄 참고 원문 (가이드라인 앞부분)", expanded=False):
+            with st.expander("📄 참고 원문", expanded=False):
                 st.text(st.session_state.guideline_hint[:800])
 
         if len(response.history) > 1:
@@ -389,22 +410,6 @@ padding:1.2rem;margin:0.8rem 0;">
 
             if r["cluster_keywords"]:
                 st.caption(f"매칭 클러스터 핵심어: {' · '.join(r['cluster_keywords'])}")
-
-            # XAI 토큰별 분석
-            nm_r = st.session_state.engine.nm_engine.evaluate(text_input, logp_thr=logp_thr)
-            per_token = nm_r.get("per_token", [])
-            if per_token:
-                with st.expander("🔍 XAI — 토큰별 분석", expanded=(v!="PASS")):
-                    for pt in per_token:
-                        tok = pt["token"]
-                        lp  = pt["logp"]
-                        ing = pt.get("in_graph", True)
-                        col = "#00ff88" if lp>=-5 else "#ffd600" if lp>=-11.5 else "#ff4444"
-                        oov = " ⚠️OOV" if not ing else ""
-                        st.markdown(
-                            f"<span style='font-family:monospace;color:{col};'>"
-                            f"[{tok}{oov}] logP:{lp:+.2f}</span>",
-                            unsafe_allow_html=True)
 
             # 클러스터별 점수
             with st.expander("클러스터별 logP", expanded=False):
