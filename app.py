@@ -8,7 +8,6 @@ import streamlit as st
 import time
 import os
 import io
-import subprocess, sys
 
 st.set_page_config(
     page_title="도메인 특화 AI",
@@ -89,10 +88,12 @@ with st.sidebar:
     st.markdown("### 📚 가이드라인 코퍼스")
 
     corpus_file = st.file_uploader(
-        "코퍼스 업로드",
-        type=["txt","pdf","docx","xlsx"],
-        help="이 문서가 도메인 기준",
+        "코퍼스 업로드 (.txt / .docx)",
+        type=["txt","docx"],
+        help="PDF는 텍스트로 변환 후 .txt로 업로드",
     )
+
+    st.caption("💡 PDF → txt 변환: Adobe, Word, 브라우저 인쇄→PDF저장 등 활용")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -108,27 +109,10 @@ with st.sidebar:
             try:
                 # 파일 읽기
                 name = corpus_file.name.lower()
-                if name.endswith(".pdf"):
-                    try:
-                        import pypdf as _pdf
-                    except ImportError:
-                        subprocess.run([sys.executable,"-m","pip","install","pypdf","--quiet"], check=False)
-                        import importlib, importlib.util
-                        import site; importlib.reload(site)
-                        import pypdf as _pdf
-                    reader = _pdf.PdfReader(io.BytesIO(corpus_file.read()))
-                    text = "\n".join(p.extract_text() or "" for p in reader.pages)
-                elif name.endswith(".docx"):
+                if name.endswith(".docx"):
                     import docx
                     doc = docx.Document(io.BytesIO(corpus_file.read()))
                     text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-                elif name.endswith(".xlsx"):
-                    import pandas as pd
-                    df = pd.read_excel(io.BytesIO(corpus_file.read()))
-                    text = "\n".join(
-                        " ".join(str(v) for v in row if str(v)!="nan")
-                        for _,row in df.iterrows()
-                    )
                 else:
                     text = corpus_file.read().decode("utf-8", errors="ignore")
 
@@ -165,6 +149,7 @@ with st.sidebar:
                 # 자동 저장
                 try:
                     import pickle
+                    nm = st.session_state.engine.nm_engine
                     engine_bytes = pickle.dumps({
                         "n_clusters":      st.session_state.engine.n_clusters,
                         "global_vocab":    st.session_state.engine.global_vocab,
@@ -187,6 +172,13 @@ with st.sidebar:
                             }
                             for k, m in st.session_state.engine.markovs.items()
                         },
+                        "nm_engine": {
+                            "uni":   dict(nm.uni),
+                            "bi":    {k2: dict(v) for k2,v in nm.bi.items()},
+                            "tri":   {k2: dict(v) for k2,v in nm.tri.items()},
+                            "total": nm.total,
+                            "alpha": getattr(nm,"alpha",0.001),
+                        } if nm.is_trained else None,
                     })
                     st.session_state.engine_bytes = engine_bytes
                     st.session_state.engine_filename = f"coreai_v2_{corpus_file.name.split('.')[0]}.pkl"
