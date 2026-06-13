@@ -134,3 +134,4 @@ def run_guardrail_loop(
         total_ms=(time.perf_counter() - t_total) * 1000,
         final_logp=last.avg_logp,
     )
+
