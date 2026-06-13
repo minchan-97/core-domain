@@ -141,3 +141,4 @@ if __name__ == "__main__":
         for orig, norm in pairs:
             tag = f"  [{orig} → {norm}]" if orig != norm else f"  [{orig}]"
             print(tag)
+
